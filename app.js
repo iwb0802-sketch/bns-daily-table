@@ -2,7 +2,7 @@ let rawRows = [];
 let mappedRows = [];
 const COLS = {
   no:['No.','No','번호'],
-  date:['행사날짜'],
+  date:['행사날짜','행사일자','예식일자'],
   time:['시간'],
   place:['장소/층수','장소','장소/충수'],
   order:['발주처'],
@@ -38,7 +38,31 @@ function parseTimeValue(t){
   if(h>=1 && h<=7) h+=12;
   return h*60+min;
 }
-function dateOnly(v){return normalize(v).replace(/\(.+?\)/g,'');}
+function excelSerialToDateString(n){
+  // Excel serial date -> YYYY-MM-DD. XLS/XLSX에서 행사날짜가 숫자로 들어오는 경우 대응.
+  const parsed = XLSX.SSF && XLSX.SSF.parse_date_code ? XLSX.SSF.parse_date_code(Number(n)) : null;
+  if(parsed && parsed.y && parsed.m && parsed.d){
+    return `${parsed.y}-${String(parsed.m).padStart(2,'0')}-${String(parsed.d).padStart(2,'0')}`;
+  }
+  return '';
+}
+function dateOnly(v){
+  if(v instanceof Date && !isNaN(v)){
+    return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
+  }
+  if(typeof v === 'number' || (/^\d{4,6}(\.\d+)?$/.test(String(v).trim()) && Number(v) > 20000)){
+    const converted = excelSerialToDateString(v);
+    if(converted) return converted;
+  }
+  let s=normalize(v).replace(/\(.+?\)/g,'').trim();
+  // 2026.05.24 / 2026/5/24 / 2026년 5월 24일 모두 통일
+  let m=s.match(/(20\d{2})\D+(\d{1,2})\D+(\d{1,2})/);
+  if(m) return `${m[1]}-${String(Number(m[2])).padStart(2,'0')}-${String(Number(m[3])).padStart(2,'0')}`;
+  // 5월24일처럼 연도가 없는 경우는 표시용으로 원문 유지
+  m=s.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일?/);
+  if(m) return `${String(Number(m[1])).padStart(2,'0')}-${String(Number(m[2])).padStart(2,'0')}`;
+  return s;
+}
 function stripRoleAndName(text){
   text=normalize(text).replace(/[,，]?\s*\d{1,3}(,\d{3})+\s*원?/g,'').replace(/\d+\s*원/g,'').trim();
   return text;
@@ -66,7 +90,7 @@ async function handleFile(file){
     rawRows=XLSX.utils.sheet_to_json(ws,{defval:''});
     mappedRows=mapRows(rawRows);
     populateDates();
-    statusEl.textContent=`업로드 완료: ${file.name} / ${mappedRows.length}행`;
+    statusEl.textContent=`업로드 완료: ${file.name} / ${mappedRows.length}행 / 날짜 ${[...new Set(mappedRows.map(r=>dateOnly(r.date)).filter(Boolean))].length}개`;
     render();
   }catch(err){
     console.error(err);
@@ -133,7 +157,10 @@ function render(){
     }
     if(d!==currentDate){
       currentDate=d;
-      if(multipleDates) seen=new Set();
+      if(multipleDates){
+        seen=new Set();
+        html.push(`<tr class="date-sep"><td colspan="${headers.length}">${escapeHtml(d)}</td></tr>`);
+      }
     }
     displayNo++;
     const cancel=isCancel(r);
@@ -179,6 +206,7 @@ function downloadExcel(){
     .normal{color:#111;text-decoration:none;}
     .dup{background:#fff1a8;font-weight:700;color:#111;text-decoration:none;}
     .gap td{height:18px;border-left:none;border-right:none;background:#fff;color:#111;}
+    .dateSep td{background:#f4f4f4;font-weight:700;text-align:left;color:#111;height:30px;}
   </style></head><body><table><colgroup>`;
   html += colWidths.map(w=>`<col style="width:${w}px">`).join('');
   html += `</colgroup><thead><tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
@@ -190,7 +218,10 @@ function downloadExcel(){
     }
     if(d!==currentDate){
       currentDate=d;
-      if(multipleDates) seen=new Set();
+      if(multipleDates){
+        seen=new Set();
+        html += `<tr class="dateSep"><td colspan="${headers.length}">${escapeHtml(d)}</td></tr>`;
+      }
     }
     displayNo++;
     html += '<tr>';

@@ -2,3 +2,5 @@
 #resultTable tr.date-gap td{height:18px;background:#fff;border-left:0;border-right:0;}
 #resultTable td,#resultTable th{color:#111 !important;}
 #resultTable td.dup{background:#fff1a8 !important;font-weight:700;color:#111 !important;}
+
+.date-sep td{background:#f4f4f4;font-weight:700;text-align:left;color:#111;padding:10px 12px;}
