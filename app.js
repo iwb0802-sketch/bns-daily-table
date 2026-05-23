@@ -27,10 +27,15 @@ function normalize(s){return String(s??'').replace(/\s+/g,' ').trim();}
 function money(v){const n=Number(String(v??'').replace(/[^0-9.-]/g,''));return isNaN(n)?0:n;}
 function findCol(row, names){const keys=Object.keys(row); for(const n of names){const k=keys.find(x=>normalize(x)===n); if(k) return k;} return null;}
 function parseTimeValue(t){
+  // BNS 시간 문자열 예: "11시", "12시30분", "1시", "3시40분", "10시30분~6시".
+  // 웨딩 진행표는 보통 오전 10~12시 이후 오후 1~7시 순서라서
+  // 1~7시는 오후 시간(13~19시)으로 보정해 정렬한다.
   t=normalize(t).replace(/\(취소\)/g,'').replace(/취소/g,'');
-  const m=t.match(/(\d{1,2})\s*시\s*(\d{1,2})?\s*분?/);
+  const m=t.match(/(\d{1,2})\s*시\s*(?:(\d{1,2})\s*분?)?/);
   if(!m) return 9999;
-  let h=parseInt(m[1],10); const min=m[2]?parseInt(m[2],10):0;
+  let h=parseInt(m[1],10);
+  const min=m[2]?parseInt(m[2],10):0;
+  if(h>=1 && h<=7) h+=12;
   return h*60+min;
 }
 function dateOnly(v){return normalize(v).replace(/\(.+?\)/g,'');}
@@ -41,6 +46,7 @@ function stripRoleAndName(text){
 function performerKey(text){
   const clean=stripRoleAndName(text);
   if(!clean) return '';
+  // 중복 표시는 이름 기준. '김영일 사회 60,000' -> '김영일'
   return clean.split(/[\s/]+/)[0];
 }
 function isCancel(row){
@@ -78,7 +84,7 @@ function mapRows(rows){
       payTotal:get(COLS.payTotal),
       players:[]
     };
-    for(let n=1;n<=12;n++){
+    for(let n=1;n<=10;n++){
       const k=findCol(r,[`악기구성${n}`]);
       row.players.push(k?normalize(r[k]):'');
     }
@@ -103,7 +109,7 @@ function filteredRows(){
 function render(){
   const rows=filteredRows();
   const seen=new Set(); let dupCount=0;
-  const maxPlayers=Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0)));
+  const maxPlayers=Math.min(10, Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0))));
   const headers=['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)];
   const html=['<thead><tr>'+headers.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>'];
   rows.forEach((r,idx)=>{
@@ -130,7 +136,7 @@ function render(){
 }
 function downloadExcel(){
   const rows=filteredRows(); if(!rows.length) return alert('다운로드할 데이터가 없습니다.');
-  const seen=new Set(); const maxPlayers=Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0)));
+  const seen=new Set(); const maxPlayers=Math.min(10, Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0))));
   const aoa=[['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)]];
   rows.forEach((r,idx)=>aoa.push([idx+1,normalize(r.date),normalize(r.time),normalize(r.place),normalize(r.arrangement),...Array.from({length:maxPlayers},(_,i)=>normalize(r.players[i]))]));
   const ws=XLSX.utils.aoa_to_sheet(aoa);
