@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BNS 당일 진행표 변환기</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">BNS / INUS 관리 도구</p>
+        <h1>당일 행사 진행표 자동 정리</h1>
+        <p class="desc">BNS 행사 엑셀(.xls/.xlsx)을 올리면 행사날짜/시간/장소/연주편성/악기구성을 추출해 시간순으로 정렬합니다. 같은 연주자가 두 번째 이후 등장하면 노란색으로 표시합니다.</p>
+      </div>
+      <div class="help">
+        <b>사용 순서</b>
+        <ol>
+          <li>BNS 행사목록 엑셀 다운로드</li>
+          <li>이 페이지에 업로드</li>
+          <li>필요 날짜 선택</li>
+          <li>진행표 확인/엑셀 다운로드</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="card uploadCard">
+      <div id="dropZone" class="dropZone">
+        <div class="uploadIcon">↥</div>
+        <strong>엑셀 파일 선택 또는 드래그</strong>
+        <span>예: BNS_Music_Event_20260524.xls</span>
+        <button id="fileBtn" type="button">파일 선택</button>
+        <input id="fileInput" type="file" accept=".xls,.xlsx,.html,.htm,.csv" hidden />
+      </div>
+      <p id="fileStatus" class="status">아직 파일을 불러오지 않았습니다.</p>
+    </section>
+
+    <section class="card controls">
+      <label>날짜 선택
+        <select id="dateSelect"><option value="">전체 날짜</option></select>
+      </label>
+      <label>검색
+        <input id="searchInput" placeholder="장소, 연주자, 편성 검색" />
+      </label>
+      <label class="checkbox"><input id="hideCancel" type="checkbox" /> 취소건 숨기기</label>
+      <button id="makeBtn" class="primary" type="button">진행표 만들기</button>
+      <button id="downloadBtn" type="button">엑셀 다운로드</button>
+    </section>
+
+    <section class="summary" id="summary"></section>
+
+    <section class="tableCard">
+      <div class="tableTitle">
+        <h2>당일 진행표</h2>
+        <p id="tableInfo">파일을 업로드하면 결과가 표시됩니다.</p>
+      </div>
+      <div class="tableWrap">
+        <table id="resultTable"></table>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

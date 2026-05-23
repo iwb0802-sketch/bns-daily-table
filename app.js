@@ -1,0 +1,141 @@
+let rawRows = [];
+let mappedRows = [];
+const COLS = {
+  no:['No.','No','번호'],
+  date:['행사날짜'],
+  time:['시간'],
+  place:['장소/층수','장소','장소/충수'],
+  order:['발주처'],
+  arrangement:['연주편성'],
+  payTotal:['연주자페이합계'],
+};
+
+const $ = (id)=>document.getElementById(id);
+const fileInput=$('fileInput'), dropZone=$('dropZone'), statusEl=$('fileStatus');
+$('fileBtn').onclick=()=>fileInput.click();
+fileInput.onchange=(e)=>handleFile(e.target.files[0]);
+['dragenter','dragover'].forEach(evt=>dropZone.addEventListener(evt,e=>{e.preventDefault();dropZone.classList.add('drag')}));
+['dragleave','drop'].forEach(evt=>dropZone.addEventListener(evt,e=>{e.preventDefault();dropZone.classList.remove('drag')}));
+dropZone.addEventListener('drop',e=>handleFile(e.dataTransfer.files[0]));
+$('makeBtn').onclick=render;
+$('downloadBtn').onclick=downloadExcel;
+$('dateSelect').onchange=render;
+$('searchInput').oninput=()=>render();
+$('hideCancel').onchange=render;
+
+function normalize(s){return String(s??'').replace(/\s+/g,' ').trim();}
+function money(v){const n=Number(String(v??'').replace(/[^0-9.-]/g,''));return isNaN(n)?0:n;}
+function findCol(row, names){const keys=Object.keys(row); for(const n of names){const k=keys.find(x=>normalize(x)===n); if(k) return k;} return null;}
+function parseTimeValue(t){
+  t=normalize(t).replace(/\(취소\)/g,'').replace(/취소/g,'');
+  const m=t.match(/(\d{1,2})\s*시\s*(\d{1,2})?\s*분?/);
+  if(!m) return 9999;
+  let h=parseInt(m[1],10); const min=m[2]?parseInt(m[2],10):0;
+  return h*60+min;
+}
+function dateOnly(v){return normalize(v).replace(/\(.+?\)/g,'');}
+function stripRoleAndName(text){
+  text=normalize(text).replace(/[,，]?\s*\d{1,3}(,\d{3})+\s*원?/g,'').replace(/\d+\s*원/g,'').trim();
+  return text;
+}
+function performerKey(text){
+  const clean=stripRoleAndName(text);
+  if(!clean) return '';
+  return clean.split(/[\s/]+/)[0];
+}
+function isCancel(row){
+  return [row.time,row.place,row.order,row.arrangement].some(v=>normalize(v).includes('취소'));
+}
+
+async function handleFile(file){
+  if(!file) return;
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    rawRows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    mappedRows=mapRows(rawRows);
+    populateDates();
+    statusEl.textContent=`업로드 완료: ${file.name} / ${mappedRows.length}행`;
+    render();
+  }catch(err){
+    console.error(err);
+    statusEl.textContent='파일을 읽지 못했습니다. BNS에서 받은 엑셀 파일인지 확인해주세요.';
+    statusEl.style.color='#b00020';
+  }
+}
+
+function mapRows(rows){
+  return rows.map((r,i)=>{
+    const get=(arr)=>{const k=findCol(r,arr); return k?r[k]:''};
+    const row={
+      no:get(COLS.no)||i+1,
+      date:get(COLS.date),
+      time:get(COLS.time),
+      place:get(COLS.place),
+      order:get(COLS.order),
+      arrangement:get(COLS.arrangement),
+      payTotal:get(COLS.payTotal),
+      players:[]
+    };
+    for(let n=1;n<=12;n++){
+      const k=findCol(r,[`악기구성${n}`]);
+      row.players.push(k?normalize(r[k]):'');
+    }
+    return row;
+  }).filter(r=>r.date||r.time||r.place||r.arrangement||r.players.some(Boolean));
+}
+function populateDates(){
+  const sel=$('dateSelect'); const current=sel.value;
+  const dates=[...new Set(mappedRows.map(r=>dateOnly(r.date)).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">전체 날짜</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  if(dates.includes(current)) sel.value=current;
+}
+function filteredRows(){
+  const date=$('dateSelect').value;
+  const q=normalize($('searchInput').value).toLowerCase();
+  const hide=$('hideCancel').checked;
+  let rows=mappedRows.filter(r=>!date||dateOnly(r.date)===date);
+  if(hide) rows=rows.filter(r=>!isCancel(r));
+  if(q) rows=rows.filter(r=>[r.date,r.time,r.place,r.order,r.arrangement,...r.players].join(' ').toLowerCase().includes(q));
+  return rows.sort((a,b)=>parseTimeValue(a.time)-parseTimeValue(b.time)||String(a.place).localeCompare(String(b.place),'ko'));
+}
+function render(){
+  const rows=filteredRows();
+  const seen=new Set(); let dupCount=0;
+  const maxPlayers=Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0)));
+  const headers=['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)];
+  const html=['<thead><tr>'+headers.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>'];
+  rows.forEach((r,idx)=>{
+    const cancel=isCancel(r);
+    html.push(`<tr class="${cancel?'cancel':''}">`);
+    html.push(`<td class="num">${idx+1}</td><td class="date">${normalize(r.date)}</td><td class="time">${normalize(r.time)}</td><td class="place">${normalize(r.place)}</td><td class="arrangement">${normalize(r.arrangement)}</td>`);
+    for(let i=0;i<maxPlayers;i++){
+      const p=normalize(r.players[i]); const key=performerKey(p);
+      let cls='player';
+      if(key){ if(seen.has(key)){ cls+=' dup'; dupCount++; } else seen.add(key); }
+      html.push(`<td class="${cls}">${p||''}</td>`);
+    }
+    html.push('</tr>');
+  });
+  html.push('</tbody>');
+  $('resultTable').innerHTML=html.join('');
+  $('tableInfo').textContent=`${rows.length}건 / 중복 표시 ${dupCount}칸`;
+  $('summary').innerHTML=[
+    ['행사 수',`${rows.length}건`],
+    ['총 연주자 입력칸',`${rows.reduce((s,r)=>s+r.players.filter(Boolean).length,0)}명`],
+    ['중복 표시',`${dupCount}칸`],
+    ['취소건',`${rows.filter(isCancel).length}건`]
+  ].map(([l,v])=>`<div class="item"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
+}
+function downloadExcel(){
+  const rows=filteredRows(); if(!rows.length) return alert('다운로드할 데이터가 없습니다.');
+  const seen=new Set(); const maxPlayers=Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0)));
+  const aoa=[['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)]];
+  rows.forEach((r,idx)=>aoa.push([idx+1,normalize(r.date),normalize(r.time),normalize(r.place),normalize(r.arrangement),...Array.from({length:maxPlayers},(_,i)=>normalize(r.players[i]))]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:6},{wch:16},{wch:14},{wch:28},{wch:28},...Array.from({length:maxPlayers},()=>({wch:18}))];
+  // duplicate highlight styles are limited in community SheetJS, so add marker column sheet for duplicated names
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'당일진행표');
+  XLSX.writeFile(wb,`BNS_당일진행표_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
