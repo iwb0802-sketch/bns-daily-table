@@ -52,6 +52,10 @@ function performerKey(text){
 function isCancel(row){
   return [row.time,row.place,row.order,row.arrangement].some(v=>normalize(v).includes('취소'));
 }
+function isYedoOnly(row){
+  // 연주편성이 정확히 '예도'인 경우만 제외. '예도+사회' 같은 조합은 유지.
+  return normalize(row.arrangement).replace(/\s+/g,'') === '예도';
+}
 
 async function handleFile(file){
   if(!file) return;
@@ -103,6 +107,7 @@ function filteredRows(){
   const hide=$('hideCancel').checked;
   let rows=mappedRows.filter(r=>!date||dateOnly(r.date)===date);
   if(hide) rows=rows.filter(r=>!isCancel(r));
+  rows=rows.filter(r=>!isYedoOnly(r));
   if(q) rows=rows.filter(r=>[r.date,r.time,r.place,r.order,r.arrangement,...r.players].join(' ').toLowerCase().includes(q));
   return rows.sort((a,b)=>parseTimeValue(a.time)-parseTimeValue(b.time)||String(a.place).localeCompare(String(b.place),'ko'));
 }
@@ -134,14 +139,51 @@ function render(){
     ['취소건',`${rows.filter(isCancel).length}건`]
   ].map(([l,v])=>`<div class="item"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
 }
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
 function downloadExcel(){
-  const rows=filteredRows(); if(!rows.length) return alert('다운로드할 데이터가 없습니다.');
-  const seen=new Set(); const maxPlayers=Math.min(10, Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0))));
-  const aoa=[['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)]];
-  rows.forEach((r,idx)=>aoa.push([idx+1,normalize(r.date),normalize(r.time),normalize(r.place),normalize(r.arrangement),...Array.from({length:maxPlayers},(_,i)=>normalize(r.players[i]))]));
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:6},{wch:16},{wch:14},{wch:28},{wch:28},...Array.from({length:maxPlayers},()=>({wch:18}))];
-  // duplicate highlight styles are limited in community SheetJS, so add marker column sheet for duplicated names
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'당일진행표');
-  XLSX.writeFile(wb,`BNS_당일진행표_${new Date().toISOString().slice(0,10)}.xlsx`);
+  const rows=filteredRows();
+  if(!rows.length) return alert('다운로드할 데이터가 없습니다.');
+  const seen=new Set();
+  const maxPlayers=Math.min(10, Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0))));
+  const headers=['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)];
+  const colWidths=[48,120,110,240,240,...Array.from({length:maxPlayers},()=>150)];
+  let html=`<!doctype html><html><head><meta charset="UTF-8"><style>
+    table{border-collapse:collapse;font-family:Arial,'맑은 고딕',sans-serif;font-size:12px;}
+    th,td{border:1px solid #000;padding:5px 7px;white-space:nowrap;vertical-align:middle;}
+    th{background:#eef1f4;font-weight:700;text-align:center;}
+    .center{text-align:center;}
+    .blue{color:#004bff;}
+    .dup{background:#fff1a8;font-weight:700;color:#111;}
+  </style></head><body><table><colgroup>`;
+  html += colWidths.map(w=>`<col style="width:${w}px">`).join('');
+  html += `</colgroup><thead><tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach((r,idx)=>{
+    html += '<tr>';
+    html += `<td class="center">${idx+1}</td>`;
+    html += `<td class="center blue">${escapeHtml(normalize(r.date))}</td>`;
+    html += `<td class="center blue">${escapeHtml(normalize(r.time))}</td>`;
+    html += `<td class="blue">${escapeHtml(normalize(r.place))}</td>`;
+    html += `<td class="blue">${escapeHtml(normalize(r.arrangement))}</td>`;
+    for(let i=0;i<maxPlayers;i++){
+      const p=normalize(r.players[i]);
+      const key=performerKey(p);
+      let cls='blue';
+      if(key){
+        if(seen.has(key)) cls+=' dup';
+        else seen.add(key);
+      }
+      html += `<td class="${cls}">${escapeHtml(p)}</td>`;
+    }
+    html += '</tr>';
+  });
+  html += '</tbody></table></body></html>';
+  const blob = new Blob(['\ufeff', html], {type:'application/vnd.ms-excel;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`BNS_당일진행표_${new Date().toISOString().slice(0,10)}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
