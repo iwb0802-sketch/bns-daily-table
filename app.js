@@ -109,18 +109,36 @@ function filteredRows(){
   if(hide) rows=rows.filter(r=>!isCancel(r));
   rows=rows.filter(r=>!isYedoOnly(r));
   if(q) rows=rows.filter(r=>[r.date,r.time,r.place,r.order,r.arrangement,...r.players].join(' ').toLowerCase().includes(q));
-  return rows.sort((a,b)=>parseTimeValue(a.time)-parseTimeValue(b.time)||String(a.place).localeCompare(String(b.place),'ko'));
+  return rows.sort((a,b)=>String(dateOnly(a.date)).localeCompare(String(dateOnly(b.date)),'ko') || parseTimeValue(a.time)-parseTimeValue(b.time) || String(a.place).localeCompare(String(b.place),'ko'));
+}
+
+function getActiveDates(rows){
+  return [...new Set(rows.map(r=>dateOnly(r.date)).filter(Boolean))];
 }
 function render(){
   const rows=filteredRows();
-  const seen=new Set(); let dupCount=0;
+  const multipleDates=getActiveDates(rows).length>1;
+  let currentDate='';
+  let seen=new Set();
+  let dupCount=0;
+  let displayNo=0;
   const maxPlayers=Math.min(10, Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0))));
   const headers=['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)];
   const html=['<thead><tr>'+headers.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>'];
-  rows.forEach((r,idx)=>{
+  rows.forEach((r)=>{
+    const d=dateOnly(r.date);
+    if(multipleDates && currentDate && d!==currentDate){
+      html.push(`<tr class="date-gap"><td colspan="${headers.length}"></td></tr>`);
+      seen=new Set();
+    }
+    if(d!==currentDate){
+      currentDate=d;
+      if(multipleDates) seen=new Set();
+    }
+    displayNo++;
     const cancel=isCancel(r);
     html.push(`<tr class="${cancel?'cancel':''}">`);
-    html.push(`<td class="num">${idx+1}</td><td class="date">${normalize(r.date)}</td><td class="time">${normalize(r.time)}</td><td class="place">${normalize(r.place)}</td><td class="arrangement">${normalize(r.arrangement)}</td>`);
+    html.push(`<td class="num">${displayNo}</td><td class="date">${normalize(r.date)}</td><td class="time">${normalize(r.time)}</td><td class="place">${normalize(r.place)}</td><td class="arrangement">${normalize(r.arrangement)}</td>`);
     for(let i=0;i<maxPlayers;i++){
       const p=normalize(r.players[i]); const key=performerKey(p);
       let cls='player';
@@ -131,12 +149,12 @@ function render(){
   });
   html.push('</tbody>');
   $('resultTable').innerHTML=html.join('');
-  $('tableInfo').textContent=`${rows.length}건 / 중복 표시 ${dupCount}칸`;
+  $('tableInfo').textContent=`${rows.length}건 / 날짜 ${getActiveDates(rows).length}개 / 중복 표시 ${dupCount}칸`;
   $('summary').innerHTML=[
     ['행사 수',`${rows.length}건`],
+    ['날짜 수',`${getActiveDates(rows).length}개`],
     ['총 연주자 입력칸',`${rows.reduce((s,r)=>s+r.players.filter(Boolean).length,0)}명`],
-    ['중복 표시',`${dupCount}칸`],
-    ['취소건',`${rows.filter(isCancel).length}건`]
+    ['중복 표시',`${dupCount}칸`]
   ].map(([l,v])=>`<div class="item"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
 }
 function escapeHtml(value){
@@ -145,24 +163,38 @@ function escapeHtml(value){
 function downloadExcel(){
   const rows=filteredRows();
   if(!rows.length) return alert('다운로드할 데이터가 없습니다.');
-  const seen=new Set();
+  const multipleDates=getActiveDates(rows).length>1;
+  let currentDate='';
+  let seen=new Set();
+  let displayNo=0;
   const maxPlayers=Math.min(10, Math.max(5,...rows.map(r=>r.players.reduce((m,p,i)=>p?i+1:m,0))));
   const headers=['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)];
   const colWidths=[48,120,110,240,240,...Array.from({length:maxPlayers},()=>150)];
   let html=`<!doctype html><html><head><meta charset="UTF-8"><style>
     table{border-collapse:collapse;font-family:Arial,'맑은 고딕',sans-serif;font-size:12px;color:#111;}
-    th,td{border:1px solid #999;padding:10px 8px;white-space:nowrap;vertical-align:middle;color:#111;text-decoration:none;height:28px;mso-height-source:userset;}
-    tr{height:28px;mso-height-source:userset;}
+    th,td{border:1px solid #999;padding:8px 7px;white-space:nowrap;vertical-align:middle;color:#111;text-decoration:none;height:32px;mso-height-source:userset;}
+    tr{height:32px;mso-height-source:userset;}
     th{background:#eef1f4;font-weight:700;text-align:center;color:#111;}
     .center{text-align:center;color:#111;}
     .normal{color:#111;text-decoration:none;}
     .dup{background:#fff1a8;font-weight:700;color:#111;text-decoration:none;}
+    .gap td{height:18px;border-left:none;border-right:none;background:#fff;color:#111;}
   </style></head><body><table><colgroup>`;
   html += colWidths.map(w=>`<col style="width:${w}px">`).join('');
   html += `</colgroup><thead><tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
-  rows.forEach((r,idx)=>{
+  rows.forEach((r)=>{
+    const d=dateOnly(r.date);
+    if(multipleDates && currentDate && d!==currentDate){
+      html += `<tr class="gap"><td colspan="${headers.length}">&nbsp;</td></tr>`;
+      seen=new Set();
+    }
+    if(d!==currentDate){
+      currentDate=d;
+      if(multipleDates) seen=new Set();
+    }
+    displayNo++;
     html += '<tr>';
-    html += `<td class="center normal">${idx+1}</td>`;
+    html += `<td class="center normal">${displayNo}</td>`;
     html += `<td class="center normal">${escapeHtml(normalize(r.date))}</td>`;
     html += `<td class="center normal">${escapeHtml(normalize(r.time))}</td>`;
     html += `<td class="normal">${escapeHtml(normalize(r.place))}</td>`;
