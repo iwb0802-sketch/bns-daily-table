@@ -150,22 +150,23 @@ function downloadExcel(){
   const headers=['No.','행사날짜','시간','장소/층수','연주편성',...Array.from({length:maxPlayers},(_,i)=>`악기구성${i+1}`)];
   const colWidths=[48,120,110,240,240,...Array.from({length:maxPlayers},()=>150)];
   let html=`<!doctype html><html><head><meta charset="UTF-8"><style>
-    table{border-collapse:collapse;font-family:Arial,'맑은 고딕',sans-serif;font-size:12px;}
-    th,td{border:1px solid #777;padding:7px 8px;white-space:nowrap;vertical-align:middle;color:#111;}
-    tr{height:24px;}
-    th{background:#eef1f4;font-weight:700;text-align:center;}
-    .center{text-align:center;}
-    .dup{background:#fff1a8;font-weight:700;color:#111;}
+    table{border-collapse:collapse;font-family:Arial,'맑은 고딕',sans-serif;font-size:12px;color:#111;}
+    th,td{border:1px solid #999;padding:10px 8px;white-space:nowrap;vertical-align:middle;color:#111;text-decoration:none;height:28px;mso-height-source:userset;}
+    tr{height:28px;mso-height-source:userset;}
+    th{background:#eef1f4;font-weight:700;text-align:center;color:#111;}
+    .center{text-align:center;color:#111;}
+    .normal{color:#111;text-decoration:none;}
+    .dup{background:#fff1a8;font-weight:700;color:#111;text-decoration:none;}
   </style></head><body><table><colgroup>`;
   html += colWidths.map(w=>`<col style="width:${w}px">`).join('');
   html += `</colgroup><thead><tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
   rows.forEach((r,idx)=>{
     html += '<tr>';
-    html += `<td class="center">${idx+1}</td>`;
-    html += `<td class="center">${escapeHtml(normalize(r.date))}</td>`;
-    html += `<td class="center">${escapeHtml(normalize(r.time))}</td>`;
-    html += `<td>${escapeHtml(normalize(r.place))}</td>`;
-    html += `<td>${escapeHtml(normalize(r.arrangement))}</td>`;
+    html += `<td class="center normal">${idx+1}</td>`;
+    html += `<td class="center normal">${escapeHtml(normalize(r.date))}</td>`;
+    html += `<td class="center normal">${escapeHtml(normalize(r.time))}</td>`;
+    html += `<td class="normal">${escapeHtml(normalize(r.place))}</td>`;
+    html += `<td class="normal">${escapeHtml(normalize(r.arrangement))}</td>`;
     for(let i=0;i<maxPlayers;i++){
       const p=normalize(r.players[i]);
       const key=performerKey(p);
@@ -174,7 +175,7 @@ function downloadExcel(){
         if(seen.has(key)) cls = (cls ? cls + ' ' : '') + 'dup';
         else seen.add(key);
       }
-      html += cls ? `<td class="${cls}">${escapeHtml(p)}</td>` : `<td>${escapeHtml(p)}</td>`;
+      html += cls ? `<td class="${cls}">${escapeHtml(p)}</td>` : `<td class="normal">${escapeHtml(p)}</td>`;
     }
     html += '</tr>';
   });
