@@ -124,7 +124,7 @@ function render(){
     for(let i=0;i<maxPlayers;i++){
       const p=normalize(r.players[i]); const key=performerKey(p);
       let cls='player';
-      if(key){ if(seen.has(key)){ cls+=' dup'; dupCount++; } else seen.add(key); }
+      if(key){ if(seen.has(key)){ cls = (cls ? cls + ' ' : '') + 'dup'; dupCount++; } else seen.add(key); }
       html.push(`<td class="${cls}">${p||''}</td>`);
     }
     html.push('</tr>');
@@ -151,10 +151,10 @@ function downloadExcel(){
   const colWidths=[48,120,110,240,240,...Array.from({length:maxPlayers},()=>150)];
   let html=`<!doctype html><html><head><meta charset="UTF-8"><style>
     table{border-collapse:collapse;font-family:Arial,'맑은 고딕',sans-serif;font-size:12px;}
-    th,td{border:1px solid #000;padding:5px 7px;white-space:nowrap;vertical-align:middle;}
+    th,td{border:1px solid #777;padding:7px 8px;white-space:nowrap;vertical-align:middle;color:#111;}
+    tr{height:24px;}
     th{background:#eef1f4;font-weight:700;text-align:center;}
     .center{text-align:center;}
-    .blue{color:#004bff;}
     .dup{background:#fff1a8;font-weight:700;color:#111;}
   </style></head><body><table><colgroup>`;
   html += colWidths.map(w=>`<col style="width:${w}px">`).join('');
@@ -162,19 +162,19 @@ function downloadExcel(){
   rows.forEach((r,idx)=>{
     html += '<tr>';
     html += `<td class="center">${idx+1}</td>`;
-    html += `<td class="center blue">${escapeHtml(normalize(r.date))}</td>`;
-    html += `<td class="center blue">${escapeHtml(normalize(r.time))}</td>`;
-    html += `<td class="blue">${escapeHtml(normalize(r.place))}</td>`;
-    html += `<td class="blue">${escapeHtml(normalize(r.arrangement))}</td>`;
+    html += `<td class="center">${escapeHtml(normalize(r.date))}</td>`;
+    html += `<td class="center">${escapeHtml(normalize(r.time))}</td>`;
+    html += `<td>${escapeHtml(normalize(r.place))}</td>`;
+    html += `<td>${escapeHtml(normalize(r.arrangement))}</td>`;
     for(let i=0;i<maxPlayers;i++){
       const p=normalize(r.players[i]);
       const key=performerKey(p);
-      let cls='blue';
+      let cls='';
       if(key){
-        if(seen.has(key)) cls+=' dup';
+        if(seen.has(key)) cls = (cls ? cls + ' ' : '') + 'dup';
         else seen.add(key);
       }
-      html += `<td class="${cls}">${escapeHtml(p)}</td>`;
+      html += cls ? `<td class="${cls}">${escapeHtml(p)}</td>` : `<td>${escapeHtml(p)}</td>`;
     }
     html += '</tr>';
   });
